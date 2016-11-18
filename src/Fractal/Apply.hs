@@ -1,19 +1,21 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Fractal.Apply(
-  ColorHSV, ApplyScope(), Box(), Transformer(),
+  ColorHSV(ColorHSV), ApplyScope(), Tri(Tri), Transformer(), Vec3,
   baseScope,
   trans, hue, sat, bright, box,
-  run, runTransformer
+  run, chooseList
 ) where
 
 import Data.Matrix
-import Fractal.Scope
+import System.Random
 import Control.Monad.Writer
-import Control.Monad.State
+import Control.Monad.RWS
 
-data ColorHSV a = ColorHSV a a a
-data Box a = Box a a a (ColorHSV a)
+data ColorHSV a = ColorHSV a a a deriving (Show, Eq, Ord)
+
+type Vec3 a = (a, a, a)
+data Tri a = Tri (Vec3 a) (Vec3 a) (Vec3 a) (ColorHSV a) deriving (Show, Eq, Ord)
 
 data ApplyScope a = ApplyScope {
   depth :: Int,
@@ -21,50 +23,65 @@ data ApplyScope a = ApplyScope {
   color :: ColorHSV a
   }
 
-data Transformer a r = Transformer (WriterT [Box a] (State (ApplyScope a)) r)
+type Transformer a = RWS (ApplyScope a) [Tri a] StdGen
 
 baseScope :: Num a => Int -> ColorHSV a -> ApplyScope a
 baseScope d c = ApplyScope { depth = d, transform = identity 4, color = c }
 
-box :: Num a => a -> a -> a -> Transformer a ()
-box x y z = Transformer $ do
-  (ApplyScope _ m c) <- getScope
-  let mat = fromList 4 1 [x, y, z, 1]
-  let t' = m * mat
-  tell [Box (t' ! (0, 0)) (t' ! (1, 0)) (t' ! (2, 0)) c]
+box :: Num a => Transformer a ()
+box = do
+  (ApplyScope _ m c) <- ask
+  let p0 = tri m 0 0 0
+  let p1 = tri m 1 0 0
+  let p2 = tri m 1 1 0
+  let p3 = tri m 1 0 1
+  let p4 = tri m 1 1 1
+  let p5 = tri m 0 1 0
+  let p6 = tri m 0 1 1
+  let p7 = tri m 0 0 1
+  tell [
+           Tri p2 p0 p1 c, Tri p2 p5 p0 c, -- Front
+           Tri p4 p1 p3 c, Tri p4 p2 p1 c, -- Right
+           Tri p4 p5 p2 c, Tri p4 p6 p5 c, -- Top
+           Tri p6 p3 p7 c, Tri p6 p4 p3 c -- Back
+           -- TODO: Left, Bottom
+       ]
 
-trans :: Num a => Matrix a -> Transformer a ()
-trans t = Transformer $ do
-  (ApplyScope d m c) <- getScope
-  putScope ApplyScope { depth = d, transform = m * t, color = c }
+  where tri m x y z =
+          let p = fromList 4 1 [x, y, z, 1] in
+          let p' = m * p in
+          (p' ! (1, 1), p' ! (2, 1), p' ! (3, 1))
 
-hue :: Num a => a -> Transformer a ()
-hue h' = Transformer $ do
-  (ApplyScope d m (ColorHSV h s b)) <- getScope
-  putScope ApplyScope { depth = d, transform = m, color = ColorHSV (h + h') s b }
+trans :: Num a => Matrix a -> ApplyScope a -> ApplyScope a
+trans t (ApplyScope d m c) = ApplyScope { depth = d, transform = m * t, color = c }
 
-sat :: (Num a, Ord a) => a -> Transformer a ()
-sat s' = Transformer $ do
-  (ApplyScope d m (ColorHSV h s b)) <- getScope
-  putScope ApplyScope { depth = d, transform = m, color = ColorHSV h (clamp $ s * s') b }
+hue :: Num a => a -> ApplyScope a -> ApplyScope a
+hue h' (ApplyScope d m (ColorHSV h s b)) = ApplyScope { depth = d, transform = m, color = ColorHSV (h + h') s b }
 
-bright :: (Num a, Ord a, MonadScope (ApplyScope a) m) => a -> m ()
-bright b' = do
-  (ApplyScope d m (ColorHSV h s b)) <- getScope
-  putScope ApplyScope { depth = d, transform = m, color = ColorHSV h s (clamp $ b * b') }
+sat :: (Num a, Ord a) => a -> ApplyScope a -> ApplyScope a
+sat s' (ApplyScope d m (ColorHSV h s b)) = ApplyScope { depth = d, transform = m, color = ColorHSV h (clamp $ s * s') b }
 
-run :: Transformer a r -> Transformer a r
-run (Transformer action) = Transformer $ do
-  (ApplyScope d m c) <- getScope
+bright :: (Num a, Ord a) => a -> ApplyScope a -> ApplyScope a
+bright b' (ApplyScope d m (ColorHSV h s b)) = ApplyScope { depth = d, transform = m, color = ColorHSV h s (clamp $ b * b') }
+
+run :: (ApplyScope a -> ApplyScope a) -> Transformer a r -> Transformer a r
+run change action = do
+  (ApplyScope d m c) <- ask
   if d < 0 then
     return undefined
   else
-    localScope (const $ ApplyScope (d - 1) m c) action
-
-runTransformer :: ApplyScope a -> Transformer a r -> [Box a]
-runTransformer initial (Transformer action) = evalState (execWriterT action) initial
+    local (const $ change (ApplyScope (d - 1) m c)) action
 
 clamp :: (Ord a, Num a) => a -> a
 clamp val | val > 1   = 1
           | val < 0   = 0
           | otherwise = val
+
+chooseList :: [(r, Rational)] -> Transformer a r
+chooseList [] = error "chooseList called with empty list"
+chooseList [(x,_)] = return x
+chooseList xs = do
+  let s = fromRational (sum (map snd xs)) :: Double -- total weight
+      cs = scanl1 (\(_,q) (y,s') -> (y, s'+q)) xs   -- cumulative weight
+  p <- toRational <$> state (randomR (0.0,s))
+  return . fst . head $ dropWhile (\(_,q) -> q < p) cs

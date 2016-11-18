@@ -15,7 +15,7 @@ cabal-version:       >=1.10
 
 executable Fractal
   main-is:             Main.hs
-  build-depends:       MonadRandom >= 0.4.2.3 && < 0.5
+  build-depends:       GLUT >= 2.7.0.10
                      , base >=4.9 && <4.10
                      , matrix >= 0.3.5.0 && <0.4
                      , mtl >= 2.2 && <2.3
