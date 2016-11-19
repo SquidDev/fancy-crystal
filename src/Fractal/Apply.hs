@@ -43,8 +43,9 @@ box = do
            Tri p2 p0 p1 c, Tri p2 p5 p0 c, -- Front
            Tri p4 p1 p3 c, Tri p4 p2 p1 c, -- Right
            Tri p4 p5 p2 c, Tri p4 p6 p5 c, -- Top
-           Tri p6 p3 p7 c, Tri p6 p4 p3 c -- Back
-           -- TODO: Left, Bottom
+           Tri p6 p3 p7 c, Tri p6 p4 p3 c, -- Back
+           Tri p0 p7 p3 c, Tri p0 p3 p1 c, -- Bottom
+           Tri p6 p7 p0 c, Tri p6 p0 p5 c  -- Left
        ]
 
   where tri m x y z =
