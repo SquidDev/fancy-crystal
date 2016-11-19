@@ -1,13 +1,16 @@
-#version 120
+#version 330
 
-attribute vec3 position;
-attribute vec3 normal;
-attribute vec3 color;
+in vec3 position;
+in vec3 normal;
+in vec3 color;
 
 uniform mat4 mvp;
 uniform mat3 mv_inv;
+uniform mat4 mvp_bias;
 
-varying vec3 f_color;
+out vec3 f_color;
+out vec4 f_shadowCoord;
+out vec3 f_position;
 
 vec3 materialDiffuse = vec3(1.0, 1.0, 1.0);
 vec3 materialAmbiant = vec3(0.3, 0.3, 0.3);
@@ -23,4 +26,6 @@ void main(void) {
   vec3 diffuseReflection = (color * 0.1) + lightDiffuse * color * max(0, dot(normalDirection, lightDirection));
 
   f_color = diffuseReflection;
+  f_position = position;
+  f_shadowCoord = mvp_bias * vec4(position, 1);
 }
