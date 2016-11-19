@@ -18,8 +18,8 @@ rotateX a =
     0, s,  c, 0,
     0, 0,  0, 1
   ]
-  where s = sin a
-        c = cos a
+  where s = sin $ a * pi / 180
+        c = cos $ a * pi / 180
 
 rotateY :: Floating a => a -> Matrix a
 rotateY a =
@@ -29,8 +29,8 @@ rotateY a =
     s, 0,  c, 0,
     0, 0,  0, 1
   ]
-  where s = sin a
-        c = cos a
+  where s = sin $ a * pi / 180
+        c = cos $ a * pi / 180
 
 rotateZ :: Floating a => a -> Matrix a
 rotateZ a =
@@ -40,8 +40,8 @@ rotateZ a =
      0, 0, 1, 0,
      0, 0, 0, 1
   ]
-  where s = sin a
-        c = cos a
+  where s = sin $ a * pi / 180
+        c = cos $ a * pi / 180
 
 scale :: Num a => a -> a -> a -> Matrix a
 scale x y z =
