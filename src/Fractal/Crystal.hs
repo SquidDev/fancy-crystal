@@ -10,7 +10,7 @@ main = join $ chooseList [(main1, 100),(main2, 100),(main3, 100), (tiny, 3)]
         main1 :: Transformer Double ()
         main1 = do
           run id final
-          run (trans (translate 0 0.4 0 * rotateX 89 * scale 0.995 0.995 0.995)                 . hue   1  . bright 0.997) main
+          run (trans (translate 0 0.4 0 * rotateX 89 * scale 0.995 0.995 0.995)                 . hue   5  . bright 0.997) main
         main2 :: Transformer Double ()
         main2 = do
           run id final

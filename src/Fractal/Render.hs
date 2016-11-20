@@ -11,7 +11,8 @@ import qualified Graphics.GLUtil as U
 import qualified Graphics.GLUtil.Camera3D as Camera3D
 import Foreign.Storable (sizeOf)
 import qualified Linear as L
-import qualified Control.Lens as L(view)
+import qualified Control.Lens as L(view, set, over)
+import Control.Monad
 
 initBuffer :: [Tri Double] -> IO GL.BufferObject
 initBuffer points = U.makeBuffer GL.ArrayBuffer $ concatMap handle points
@@ -28,6 +29,9 @@ initBuffer points = U.makeBuffer GL.ArrayBuffer $ concatMap handle points
               x3, y3, z3, n1, n2, n3, r, g, b
             ]
 
+debug :: Bool
+debug = False
+
 display :: [Tri Double] -> IO ()
 display points = do
   (_, _) <- GLUT.getArgsAndInitialize
@@ -36,7 +40,9 @@ display points = do
   GL.depthFunc $= Just GL.Less
   GL.cullFace $= Just GL.Front
 
-  camera <- newIORef $ Camera3D.dolly (L.V3 0 0 (-4)) Camera3D.fpsCamera
+  light <- newIORef $ L.V3 0 5 (5)
+  pos <- newIORef $ L.V3 0 0 (-12)
+  rotation <- newIORef (L.axisAngle 0 0 :: L.Quaternion Float)
 
   shaders <- U.loadShaderProgram [(GL.VertexShader, "main.v.glsl"), (GL.FragmentShader, "main.f.glsl")]
   shadowShader <- U.loadShaderProgram [(GL.VertexShader, "shadow.v.glsl"), (GL.FragmentShader, "shadow.f.glsl")]
@@ -59,7 +65,16 @@ display points = do
   let pointSize = fromIntegral $ length points * 3
 
   GLUT.displayCallback $= do
-    camera' <- GLUT.get camera
+    -- Some basic camera work
+    light' <- GLUT.get light
+    pos' <- GLUT.get pos
+    rotation' <- GLUT.get rotation
+
+    size <- GLUT.get GLUT.windowSize
+    let (GLUT.Size width height) = size
+
+    let model = L.identity
+
     -- Render the shadow map
     GL.bindFramebuffer GL.Framebuffer $= depthBuffer
     GL.viewport $= (GL.Position 0 0, GL.Size 1024 1024)
@@ -69,10 +84,11 @@ display points = do
     U.enableAttrib shadowShader "position"
 
     -- Render the depth buffer
-    let depthProj = Camera3D.orthoMatrix (-10) 10 (-10) 10 (-10) 20 :: L.M44 Float
-    let depthView = L.lookAt (L.V3 0 0 (-3)) (L.V3 0 0 0) (L.V3 0 1 0) :: L.M44 Float
+    let depthProj = Camera3D.orthoMatrix (-10) 10 (-10) 10 (-10) 20
+    let depthView = (L.lookAt light' (L.V3 0 0 0) (L.V3 0 1 0) :: L.M44 Float)
+    let depthMVP = depthProj L.!*! depthView L.!*! model
 
-    U.setUniform shadowShader "mvp" (depthProj L.!*! depthView)
+    U.setUniform shadowShader "mvp" depthMVP
     U.setAttrib shadowShader "position" GL.ToFloat $ GL.VertexArrayDescriptor 3 GL.Double (floatSize * 9) U.offset0
     GL.bindBuffer GL.ArrayBuffer $= Just points'
 
@@ -83,25 +99,29 @@ display points = do
     -- Render the main screen
     GL.bindFramebuffer GL.Framebuffer $= GL.defaultFramebufferObject
 
-    size <- GLUT.get GLUT.windowSize
-    GL.viewport $= (GL.Position 0 0, size)
-    let (GLUT.Size width height) = size
+    if debug then
+      GL.viewport $= (GL.Position 0 0, GLUT.Size (width `div` 2) (height `div` 2))
+    else
+      GL.viewport $= (GL.Position 0 0, GLUT.Size width height)
 
     GL.clearColor $= GL.Color4 1 1 1 1
     GL.clear [GL.ColorBuffer, GL.DepthBuffer]
-
 
     GL.currentProgram $= Just (U.program shaders)
     U.enableAttrib shaders "position"
     U.enableAttrib shaders "normal"
     U.enableAttrib shaders "color"
 
-    let projection = Camera3D.projectionMatrix (pi/4) (fromIntegral width / fromIntegral height) 0.1 100 :: L.M44 GL.GLfloat
-    let view = camMatrix camera'
     let bias = L.V4 (L.V4 0.5 0 0 0.5) (L.V4 0 0.5 0 0.5) (L.V4 0 0 0.5 0.5) (L.V4 0 0 0 1)
-    U.setUniform shaders "mvp" (projection L.!*! view)
-    U.setUniform shaders "mv_inv" (L.transpose $ L.inv33 $ L.view L._m33 view)
-    U.setUniform shaders "mvp_bias" (bias L.!*! depthProj L.!*! depthView)
+    let projection = Camera3D.projectionMatrix (pi/4) (fromIntegral width / fromIntegral height) 0.1 100 :: L.M44 GL.GLfloat
+    let view = L.mkTransformation 1 pos' L.!*! L.mkTransformation rotation' (L.V3 0 0 0)
+    let viewModel = view L.!*! model
+    U.setUniform shaders "mvp" (projection L.!*! viewModel)
+    U.setUniform shaders "mv_inv" (L.transpose $ L.inv33 $ L.view L._m33 viewModel)
+    U.setUniform shaders "mv" viewModel
+    U.setUniform shaders "v" view
+    U.setUniform shaders "mvp_bias" (bias L.!*! depthMVP)
+    U.setUniform shaders "lightPosition" light'
 
     GL.activeTexture $= GL.TextureUnit 0
     GL.textureBinding GL.Texture2D $= Just depthTexture
@@ -119,9 +139,32 @@ display points = do
     GL.vertexAttribArray (U.getAttrib shaders "normal") $= GL.Disabled
     GL.vertexAttribArray (U.getAttrib shaders "color") $= GL.Disabled
 
+    GL.currentProgram $= Nothing
+    GL.cullFace $= Nothing
+
+    GL.activeTexture $= GL.TextureUnit 0
+    GL.textureBinding GL.Texture2D $= Just depthTexture
+    GL.texture GL.Texture2D $= GL.Enabled
+
+    when debug $ do
+      GL.viewport $= (GL.Position (width `div` 2) 0, GLUT.Size (width `div` 2) (height `div` 2))
+      GL.preservingMatrix $ do
+        GL.loadIdentity
+        GL.renderPrimitive GL.Quads $ do
+          GL.texCoord (GL.TexCoord2 (0 :: GL.GLfloat) 0)
+          GL.vertex (GL.Vertex2 (-1 :: GL.GLfloat) (-1))
+
+          GL.texCoord (GL.TexCoord2 (0 :: GL.GLfloat) 1)
+          GL.vertex (GL.Vertex2 (-1 :: GL.GLfloat) 1)
+
+          GL.texCoord (GL.TexCoord2 (1 :: GL.GLfloat) 1)
+          GL.vertex (GL.Vertex2 (1 :: GL.GLfloat) 1)
+
+          GL.texCoord (GL.TexCoord2 (1 :: GL.GLfloat) 0)
+          GL.vertex (GL.Vertex2 (1 :: GL.GLfloat) (-1))
     GLUT.swapBuffers
   GLUT.reshapeCallback $= Just reshape
-  GLUT.keyboardMouseCallback $= Just (keyboardMouse camera)
+  GLUT.keyboardMouseCallback $= Just (keyboardMouse light pos rotation)
   GLUT.idleCallback $= Just (GLUT.postRedisplay Nothing)
   GLUT.mainLoop
 
@@ -149,24 +192,40 @@ hsvToRgb (ColorHSV h s v) =
 reshape :: GLUT.ReshapeCallback
 reshape size = GL.viewport $= (GL.Position 0 0, size)
 
-keyboardMouse :: IORef (Camera3D.Camera GL.GLfloat) -> GLUT.KeyboardMouseCallback
-keyboardMouse camera key GLUT.Down _ _ = case key of
-                                              (GLUT.Char '+') -> camera $~! Camera3D.dolly (L.V3 0 0 (-0.1))
-                                              (GLUT.Char '-') -> camera $~! Camera3D.dolly (L.V3 0 0 0.1)
-                                              (GLUT.Char 'w') -> camera $~! Camera3D.tilt (-5)
-                                              (GLUT.Char 's') -> camera $~! Camera3D.tilt 5
-                                              (GLUT.Char 'a') -> camera $~! Camera3D.pan 5
-                                              (GLUT.Char 'd') -> camera $~! Camera3D.pan (-5)
-                                              (GLUT.SpecialKey GLUT.KeyLeft) -> camera $~! Camera3D.dolly (L.V3 (-0.1) 0 0)
-                                              (GLUT.SpecialKey GLUT.KeyRight) -> camera $~! Camera3D.dolly (L.V3 0.1 0 0)
-                                              (GLUT.SpecialKey GLUT.KeyDown) -> camera $~! Camera3D.dolly (L.V3 0 (-0.1) 0)
-                                              (GLUT.SpecialKey GLUT.KeyUp) -> camera $~! Camera3D.dolly (L.V3 0 0.1 0)
-                                              _ -> return ()
-keyboardMouse _ _ _ _ _ = return ()
+dP :: Float
+dP = 0.1
+
+dA :: Float
+dA = pi/40
+
+keyboardMouse :: IORef (L.V3 Float) -> IORef (L.V3 Float) -> IORef (L.Quaternion Float) -> GLUT.KeyboardMouseCallback
+keyboardMouse light pos rot key GLUT.Down _ _ = case key of
+                                                  (GLUT.Char 'w') -> rot $~! (L.axisAngle (L.V3 1 0 0) (-dA) *)
+                                                  (GLUT.Char 's') -> rot $~! (L.axisAngle (L.V3 1 0 0) dA *)
+                                                  (GLUT.Char 'a') -> rot $~! (L.axisAngle (L.V3 0 1 0) dA *)
+                                                  (GLUT.Char 'd') -> rot $~! (L.axisAngle (L.V3 0 1 0) (-dA) *)
+
+                                                  (GLUT.Char 'u') -> light $~! L.over L._z (subtract dP)
+                                                  (GLUT.Char 'o') -> light $~! L.over L._z (+dP)
+                                                  (GLUT.Char 'j') -> light $~! L.over L._x (subtract dP)
+                                                  (GLUT.Char 'l') -> light $~! L.over L._x (+dP)
+                                                  (GLUT.Char 'k') -> light $~! L.over L._y (subtract dP)
+                                                  (GLUT.Char 'i') -> light $~! L.over L._y (+dP)
+
+                                                  (GLUT.Char 'p') -> do
+                                                    light' <- GLUT.get light
+                                                    pos' <- GLUT.get pos
+                                                    rot' <- GLUT.get rot
+                                                    print (light', pos', rot')
+
+                                                  (GLUT.Char '-') -> pos $~! L.over L._z (subtract dP)
+                                                  (GLUT.Char '+') -> pos $~! L.over L._z (+dP)
+                                                  (GLUT.SpecialKey GLUT.KeyLeft) -> pos $~! L.over L._x (subtract dP)
+                                                  (GLUT.SpecialKey GLUT.KeyRight) -> pos $~! L.over L._x (+dP)
+                                                  (GLUT.SpecialKey GLUT.KeyDown) -> pos $~! L.over L._y (subtract dP)
+                                                  (GLUT.SpecialKey GLUT.KeyUp) -> pos $~! L.over L._y (+dP)
+                                                  _ -> return ()
+keyboardMouse _ _ _ _ _ _ _ = return ()
 
 floatSize :: Num a => a
 floatSize = fromIntegral $ sizeOf (undefined :: GL.GLdouble)
-
-camMatrix :: (L.Conjugate a, L.Epsilon a, RealFloat a) => Camera3D.Camera a -> L.M44 a
-camMatrix c = L.mkTransformation q (Camera3D.location c)
-  where q = L.conjugate $ Camera3D.orientation c

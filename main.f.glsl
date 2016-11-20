@@ -34,7 +34,8 @@ void main(void) {
   float visibility = 1.0;
   for(int i = 0; i < 4; i++) {
     int index = int(16.0 * random(floor(f_position * 1000.0), i)) % 16;
-    visibility -= 0.2 * (1.0 - texture(shadow, vec3(f_shadowCoord.xy + poissonDisk[index]/700, (f_shadowCoord.z - 0.005)/f_shadowCoord.w)));
+    visibility -= 0.2 * (1.0 - texture(shadow, vec3(f_shadowCoord.xy + poissonDisk[index]/7000.0, (f_shadowCoord.z - 0.05)/f_shadowCoord.w)));
   }
+
   gl_FragColor = vec4(visibility * f_color, 1);
 }
