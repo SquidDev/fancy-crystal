@@ -15,7 +15,7 @@ out vec3 f_color;
 out vec4 f_shadowCoord;
 out vec3 f_position;
 
-float ambient = 0.3;
+float ambient = 0.5;
 
 void main(void) {
   gl_Position = mvp * vec4(position, 1);
