@@ -2,8 +2,12 @@
 
 ## Running
  - Clone the repository: `git clone https://github.com/SquidDev/fancy-tal`
+ - Install dependencies: `cabal install --only-dependencies`. This may take a while.
  - Run using cabal: `cabal run`.
- - You can also pass in `--static` to prevent animating the generated crystal (`cabal run -- --static`).
+ - ??
+ - Profit!
+
+You can also pass in `--static` to prevent animating the generated crystal (`cabal run -- --static`).
 
 ## Controls
  - `wd`, `as` to move rotate the crystal on the x and y planes.
