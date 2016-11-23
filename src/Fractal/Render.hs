@@ -1,18 +1,18 @@
 module Fractal.Render(display, Options(..)) where
 
-import Fractal.Apply
-import qualified Graphics.Rendering.OpenGL as GL
-import qualified Graphics.UI.GLUT as GLUT
-import Graphics.Rendering.OpenGL (($=))
-import Graphics.UI.GLUT (($~!))
+import Control.Monad
 import Data.Fixed
 import Data.IORef
+import Foreign.Storable (sizeOf)
+import Fractal.Apply
+import Graphics.Rendering.OpenGL (($=))
+import Graphics.UI.GLUT (($~!))
+import qualified Control.Lens as L(view, over)
 import qualified Graphics.GLUtil as U
 import qualified Graphics.GLUtil.Camera3D as Camera3D
-import Foreign.Storable (sizeOf)
+import qualified Graphics.Rendering.OpenGL as GL
+import qualified Graphics.UI.GLUT as GLUT
 import qualified Linear as L
-import qualified Control.Lens as L(view, over)
-import Control.Monad
 
 initBuffer :: [Tri Double] -> IO GL.BufferObject
 initBuffer points = U.makeBuffer GL.ArrayBuffer $ concatMap handle points

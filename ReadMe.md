@@ -4,8 +4,6 @@
  - Clone the repository: `git clone https://github.com/SquidDev/fancy-tal`
  - Install dependencies: `cabal install --only-dependencies`. This may take a while.
  - Run using cabal: `cabal run`.
- - ??
- - Profit!
 
 You can also pass in `--static` to prevent animating the generated crystal (`cabal run -- --static`).
 
@@ -47,3 +45,8 @@ A fancy animated image of the crystal rotating.
 Cropped regions of random crystals. Note, these were rotated by hand to get a better view.
 
 ![](images/static-01.png) ![](images/static-02.png)
+
+## Future enhancements
+- Ambient occlusion [using the depth buffer](http://john-chapman-graphics.blogspot.co.uk/2013/01/ssao-tutorial.html)
+- Fancy colours, maybe [Iridescence](https://en.wikipedia.org/wiki/Iridescence).
+- Correct normals: they should be the average of all three points. This will give a smoother transition for shading.

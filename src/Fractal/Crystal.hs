@@ -1,8 +1,8 @@
 module Fractal.Crystal where
 
+import Control.Monad
 import Fractal.Apply
 import Fractal.Transform
-import Control.Monad
 
 main :: Transformer Double ()
 main = join $ chooseList [(main1, 100),(main2, 100),(main3, 100), (tiny, 3)]

@@ -1,16 +1,12 @@
 module Main where
 
+import Control.Monad.RWS
 import Fractal.Apply
 import Fractal.Render
 import Fractal.Transform
 import qualified Fractal.Crystal as Crystal
-import System.Random
 import System.Environment
-import Control.Monad.RWS
-
--- TODO: Ambient occlusion from http://john-chapman-graphics.blogspot.co.uk/2013/01/ssao-tutorial.html
--- TODO: Fancy colours, maybe https://en.wikipedia.org/wiki/Iridescence
--- TODO: Correct normals: they should be the average of all three points
+import System.Random
 
 main :: IO ()
 main = do

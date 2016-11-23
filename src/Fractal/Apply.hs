@@ -7,10 +7,10 @@ module Fractal.Apply(
   run, chooseList
 ) where
 
+import Control.Monad.RWS
+import Data.Functor
 import Data.Matrix
 import System.Random
-import Control.Monad.Writer
-import Control.Monad.RWS
 
 data ColorHSV a = ColorHSV a a a deriving (Show, Eq, Ord)
 
