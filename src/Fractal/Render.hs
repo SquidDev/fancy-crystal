@@ -44,8 +44,8 @@ display options points = do
   pos <- newIORef $ L.V3 0 0 (-12)
   rotation <- newIORef (L.axisAngle 0 0 :: L.Quaternion Float)
 
-  shaders <- U.loadShaderProgram [(GL.VertexShader, "main.v.glsl"), (GL.FragmentShader, "main.f.glsl")]
-  shadowShader <- U.loadShaderProgram [(GL.VertexShader, "shadow.v.glsl"), (GL.FragmentShader, "shadow.f.glsl")]
+  shaders <- U.loadShaderProgram [(GL.VertexShader, "shaders/main.v.glsl"), (GL.FragmentShader, "shaders/main.f.glsl")]
+  shadowShader <- U.loadShaderProgram [(GL.VertexShader, "shaders/shadow.v.glsl"), (GL.FragmentShader, "shaders/shadow.f.glsl")]
 
   -- Render the depth buffer
   depthBuffer <- GL.genObjectName
