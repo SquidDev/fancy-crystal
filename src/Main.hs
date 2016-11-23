@@ -5,6 +5,7 @@ import Fractal.Render
 import Fractal.Transform
 import qualified Fractal.Crystal as Crystal
 import System.Random
+import System.Environment
 import Control.Monad.RWS
 
 -- TODO: Ambient occlusion from http://john-chapman-graphics.blogspot.co.uk/2013/01/ssao-tutorial.html
@@ -13,11 +14,11 @@ import Control.Monad.RWS
 
 main :: IO ()
 main = do
+  args <- getArgs
+  let options = Options {
+        debug = "--debug" `elem` args || "-d" `elem` args,
+        animate = not ("--static" `elem` args || "-s" `elem` args)
+        }
   r <- getStdGen
   let points = snd $ execRWS Crystal.main (baseScope 600 (ColorHSV 275 1 1)) r
-  let points' = snd $ execRWS box (baseScope 600 (ColorHSV 0 0 1)) r
-  let mapped' = snd $ execRWS (do
-                                  box
-                                  run (trans (scale 5 0.5 5 * translate (-0.5) (-2) (-0.5))) box
-                              ) (baseScope 600 (ColorHSV 0 0 1)) r
-  display points
+  display options points

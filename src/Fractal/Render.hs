@@ -1,4 +1,4 @@
-module Fractal.Render(display) where
+module Fractal.Render(display, Options(..)) where
 
 import Fractal.Apply
 import qualified Graphics.Rendering.OpenGL as GL
@@ -11,7 +11,7 @@ import qualified Graphics.GLUtil as U
 import qualified Graphics.GLUtil.Camera3D as Camera3D
 import Foreign.Storable (sizeOf)
 import qualified Linear as L
-import qualified Control.Lens as L(view, set, over)
+import qualified Control.Lens as L(view, over)
 import Control.Monad
 
 initBuffer :: [Tri Double] -> IO GL.BufferObject
@@ -29,18 +29,18 @@ initBuffer points = U.makeBuffer GL.ArrayBuffer $ concatMap handle points
               x3, y3, z3, n1, n2, n3, r, g, b
             ]
 
-debug :: Bool
-debug = False
+data Options = Options { debug :: Bool, animate :: Bool }
 
-display :: [Tri Double] -> IO ()
-display points = do
+display :: Options -> [Tri Double] -> IO ()
+display options points = do
   (_, _) <- GLUT.getArgsAndInitialize
   GLUT.initialDisplayMode $= [GLUT.WithDepthBuffer, GLUT.DoubleBuffered]
   _ <- GLUT.createWindow "Main"
+  GLUT.windowSize $= GL.Size 800 600
   GL.depthFunc $= Just GL.Less
   GL.cullFace $= Just GL.Front
 
-  light <- newIORef $ L.V3 0 5 (5)
+  light <- newIORef $ L.V3 0 5 5
   pos <- newIORef $ L.V3 0 0 (-12)
   rotation <- newIORef (L.axisAngle 0 0 :: L.Quaternion Float)
 
@@ -73,7 +73,7 @@ display points = do
     size <- GLUT.get GLUT.windowSize
     let (GLUT.Size width height) = size
 
-    let model = L.identity
+    let model = L.mkTransformation rotation' (L.V3 0 0 0) -- L.identity
 
     -- Render the shadow map
     GL.bindFramebuffer GL.Framebuffer $= depthBuffer
@@ -99,7 +99,7 @@ display points = do
     -- Render the main screen
     GL.bindFramebuffer GL.Framebuffer $= GL.defaultFramebufferObject
 
-    if debug then
+    if debug options then
       GL.viewport $= (GL.Position 0 0, GLUT.Size (width `div` 2) (height `div` 2))
     else
       GL.viewport $= (GL.Position 0 0, GLUT.Size width height)
@@ -114,7 +114,7 @@ display points = do
 
     let bias = L.V4 (L.V4 0.5 0 0 0.5) (L.V4 0 0.5 0 0.5) (L.V4 0 0 0.5 0.5) (L.V4 0 0 0 1)
     let projection = Camera3D.projectionMatrix (pi/4) (fromIntegral width / fromIntegral height) 0.1 100 :: L.M44 GL.GLfloat
-    let view = L.mkTransformation 1 pos' L.!*! L.mkTransformation rotation' (L.V3 0 0 0)
+    let view = L.mkTransformation 1 pos' -- L.!*! L.mkTransformation rotation' (L.V3 0 0 0)
     let viewModel = view L.!*! model
     U.setUniform shaders "mvp" (projection L.!*! viewModel)
     U.setUniform shaders "mv_inv" (L.transpose $ L.inv33 $ L.view L._m33 viewModel)
@@ -146,7 +146,7 @@ display points = do
     GL.textureBinding GL.Texture2D $= Just depthTexture
     GL.texture GL.Texture2D $= GL.Enabled
 
-    when debug $ do
+    when (debug options) $ do
       GL.viewport $= (GL.Position (width `div` 2) 0, GLUT.Size (width `div` 2) (height `div` 2))
       GL.preservingMatrix $ do
         GL.loadIdentity
@@ -165,7 +165,9 @@ display points = do
     GLUT.swapBuffers
   GLUT.reshapeCallback $= Just reshape
   GLUT.keyboardMouseCallback $= Just (keyboardMouse light pos rotation)
-  GLUT.idleCallback $= Just (GLUT.postRedisplay Nothing)
+  GLUT.idleCallback $= Just (do
+    when (animate options) (rotation $~! (L.axisAngle (L.V3 0 1 0) (-pi/1000) *))
+    GLUT.postRedisplay Nothing)
   GLUT.mainLoop
 
   GL.deleteObjectName points'
